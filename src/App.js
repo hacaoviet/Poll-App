@@ -450,7 +450,7 @@ function App() {
       return (
         <div>
           <Message>
-            <h2>Welcome to Decentralized Poll App</h2>
+            <h2>Welcome to Poll App</h2>
             <p>Connect your wallet to create polls and vote</p>
             <ConnectButton onClick={connectWallet}>
               Connect MetaMask

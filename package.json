@@ -1,7 +1,7 @@
 {
   "name": "poll-app-blockchain",
   "version": "1.0.0",
-  "description": "A decentralized poll application using blockchain technology",
+  "description": "A poll application using blockchain technology",
   "main": "index.js",
   "scripts": {
     "start": "react-scripts start",

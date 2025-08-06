@@ -1,4 +1,4 @@
-# 🗳️ Decentralized Poll App
+# 🗳️ Poll App
 
 A modern, decentralized polling application built with React.js and Solidity smart contracts. Users can create polls and vote using their MetaMask wallet, with all data stored securely on the blockchain.
 
@@ -14,7 +14,7 @@ A modern, decentralized polling application built with React.js and Solidity sma
 
 - **Frontend**: React.js with styled-components
 - **Blockchain**: Solidity smart contracts
-- **Development**: Hardhat framework
+- **Development**: Hardhat framework (dev, test, deploy smart contract)
 - **Wallet Integration**: MetaMask
 - **Web3**: Ethers.js library
 
