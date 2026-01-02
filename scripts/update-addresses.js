@@ -27,9 +27,6 @@ async function updateContractAddresses(contractAddress) {
   // Write updated config
   fs.writeFileSync(configPath, updatedConfig);
 
-  console.log("Contract address updated in:");
-  console.log("1. src/contracts/contract-address.json");
-  console.log("2. src/config.js");
 }
 
 module.exports = {

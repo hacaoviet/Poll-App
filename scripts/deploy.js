@@ -6,18 +6,8 @@ async function main() {
   const pollContract = await PollContract.deploy();
 
   await pollContract.waitForDeployment();
-
   const contractAddress = await pollContract.getAddress();
-  console.log("PollContract deployed to:", contractAddress);
-  
-  // Update contract addresses in all necessary files
   await updateContractAddresses(contractAddress);
-  
-  const PollContractArtifact = artifacts.readArtifactSync("PollContract");
-  fs.writeFileSync(
-    contractsDir + "/PollContract.json",
-    JSON.stringify(PollContractArtifact, null, 2)
-  );
 }
 
 main()

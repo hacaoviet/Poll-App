@@ -1,16 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import detectEthereumProvider from '@metamask/detect-provider';
 import { ethers } from 'ethers';
-import PollContract from './contracts/PollContract.json';
+import PollContract from './artifacts/contracts/PollContract.sol/PollContract.json';
 import CreatePoll from './components/CreatePoll';
 import PollList from './components/PollList';
 import Header from './components/Header';
-import TransactionInfo from './components/TransactionInfo';
 import { 
-  SEPOLIA_RPC_URL, 
+  LOCALHOST_RPC_URL,
   CONTRACT_ADDRESS, 
-  SEPOLIA_CHAIN_ID,
-  SEPOLIA_NETWORK_CONFIG 
+  LOCALHOST_CHAIN_ID,
+  getRpcUrl
 } from './config';
 import {
   AppContainer,
@@ -27,57 +26,161 @@ function App() {
   const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
   const [contract, setContract] = useState(null);
-  const [readOnlyContract, setReadOnlyContract] = useState(null);
   const [account, setAccount] = useState(null);
+  const [balance, setBalance] = useState(null);
   const [activeTab, setActiveTab] = useState('polls');
   const [polls, setPolls] = useState([]);
   const [loading, setLoading] = useState(false);
   const [pollsLoaded, setPollsLoaded] = useState(false);
-  const [lastTransaction, setLastTransaction] = useState(null);
   const [error, setError] = useState('');
-  const [lastRefreshTime, setLastRefreshTime] = useState(0);
+
+  // Helper: Get network info (chainId and RPC URL)
+  const getNetworkInfo = async () => {
+    let chainId = LOCALHOST_CHAIN_ID;
+    let rpcUrl = LOCALHOST_RPC_URL;
+    
+    if (window.ethereum) {
+      try {
+        chainId = await window.ethereum.request({ method: 'eth_chainId' });
+        rpcUrl = getRpcUrl(chainId);
+      } catch (error) {
+        console.log('Could not detect chain ID, using localhost');
+      }
+    }
+    return { chainId, rpcUrl };
+  };
+
+  // Helper: Sanitize poll data
+  const sanitizePollData = (pollData) => ({
+    id: pollData.id.toString(),
+    title: pollData.title,
+    options: pollData.options,
+    voteCounts: pollData.voteCounts.map(count => count.toString()),
+    creator: pollData.creator,
+    totalVotes: pollData.totalVotes.toString(),
+    createdAt: new Date(Number(pollData.createdAt) * 1000).toLocaleDateString()
+  });
+
+  // Helper: Refresh balance
+  const refreshBalance = async (ethereumProvider, accountAddress) => {
+    if (!ethereumProvider || !accountAddress) return;
+    try {
+      const ethersProvider = new ethers.BrowserProvider(ethereumProvider);
+      const accountBalance = await ethersProvider.getBalance(accountAddress);
+      setBalance(ethers.formatEther(accountBalance));
+    } catch (error) {
+      console.error('Error refreshing balance:', error);
+    }
+  };
+
+  // Helper: Setup account, signer, contract, and balance
+  const setupAccountAndContract = async (ethereumProvider, accountAddress) => {
+    if (!ethereumProvider || !accountAddress) return null;
+
+    const ethersProvider = new ethers.BrowserProvider(ethereumProvider);
+    const signerInstance = await ethersProvider.getSigner();
+    
+    // Update state
+    setAccount(accountAddress);
+    setSigner(signerInstance);
+    
+    // Fetch and update balance
+    await refreshBalance(ethereumProvider, accountAddress);
+    
+    // Create contract instance
+    const contractInstance = new ethers.Contract(
+      CONTRACT_ADDRESS,
+      PollContract.abi,
+      signerInstance
+    );
+    setContract(contractInstance);
+    
+    return contractInstance;
+  };
+
+  // Helper: Handle account changes
+  const handleAccountChange = async (ethereumProvider, accounts) => {
+    if (accounts.length > 0) {
+      await setupAccountAndContract(ethereumProvider, accounts[0]);
+    } else {
+      // Handle disconnection
+      setProvider(null);
+      setAccount(null);
+      setBalance(null);
+      setSigner(null);
+      setContract(null);
+      setPolls([]);
+      setPollsLoaded(false);
+    }
+  };
+
+  // Helper: Handle chain changes
+  const handleChainChange = () => {
+    setPollsLoaded(false);
+    window.location.reload();
+  };
+
+  // Helper: Load polls from contract instance
+  const loadPollsFromContract = async (contractInstance) => {
+    try {
+      const pollCount = await contractInstance.pollCount();
+      const pollsData = [];
+      
+      if (pollCount > 0) {
+        for (let i = 1; i <= pollCount; i++) {
+          try {
+            const pollData = await contractInstance.getPoll(i);
+            pollsData.push(sanitizePollData(pollData));
+            console.log(`Loaded poll ${i}:`, pollData.title);
+          } catch (pollError) {
+            console.error(`Error loading poll ${i}:`, pollError);
+          }
+        }
+        
+        // Sort polls to show newest first
+        const reversedPolls = [...pollsData].reverse();
+        setPolls(reversedPolls);
+      } else {
+        console.log('No polls found (pollCount is 0)');
+      }
+      setPollsLoaded(true);
+    } catch (error) {
+      console.error('Error loading polls:', error);
+      setError('Failed to load polls: ' + (error.message || error.reason || 'Unknown error'));
+      setPollsLoaded(true);
+    }
+  };
 
   useEffect(() => {
     // Initialize read-only contract and load polls immediately
     const initializeAndLoadPolls = async () => {
-      const readOnlyProvider = new ethers.JsonRpcProvider(SEPOLIA_RPC_URL);
-      const contractInstance = new ethers.Contract(
-        CONTRACT_ADDRESS,
-        PollContract.abi,
-        readOnlyProvider
-      );
-      setReadOnlyContract(contractInstance);
-      
-      // Load polls immediately using the read-only contract
       try {
-        const pollCount = await contractInstance.pollCount();
-        const pollsData = [];
+        const { rpcUrl } = await getNetworkInfo();
         
-        if (pollCount > 0) {
-          for (let i = 1; i <= pollCount; i++) {
-            try {
-              const pollData = await contractInstance.getPoll(i);
-              const sanitizedPollData = {
-                id: pollData.id.toString(),
-                title: pollData.title,
-                options: pollData.options,
-                voteCounts: pollData.voteCounts.map(count => count.toString()),
-                creator: pollData.creator,
-                totalVotes: pollData.totalVotes.toString(),
-                createdAt: new Date(Number(pollData.createdAt) * 1000).toLocaleDateString()
-              };
-              pollsData.push(sanitizedPollData);
-            } catch (pollError) {
-              console.error('Error loading poll:', pollError);
-            }
-          }
-          
-          // Sort polls to show newest first
-          const reversedPolls = [...pollsData].reverse();
-          setPolls(reversedPolls);
+        console.log('Connecting to contract at:', CONTRACT_ADDRESS);
+        const readOnlyProvider = new ethers.JsonRpcProvider(rpcUrl);
+        
+        // Check if contract has code at this address
+        const code = await readOnlyProvider.getCode(CONTRACT_ADDRESS);
+        if (code === '0x') {
+          console.error('No contract code found at address:', CONTRACT_ADDRESS);
+          setError(`No contract found at ${CONTRACT_ADDRESS}. Please deploy the contract first.`);
           setPollsLoaded(true);
+          return;
         }
+        
+        const contractInstance = new ethers.Contract(
+          CONTRACT_ADDRESS,
+          PollContract.abi,
+          readOnlyProvider
+        );
+        
+        // Load polls immediately using the read-only contract
+        await loadPollsFromContract(contractInstance);
       } catch (error) {
+        console.error('Error initializing read-only contract:', error);
+        setError('Failed to connect to contract: ' + (error.message || error.reason || 'Unknown error'));
+        setPollsLoaded(true);
       }
     };
 
@@ -94,11 +197,10 @@ function App() {
     if (contract && account && !pollsLoaded) {
       loadPolls();
     }
-  }, [contract?.target, account, pollsLoaded]); // Only depend on contract address, not the entire contract object
+  }, [contract?.target, account, pollsLoaded]);
 
   const initializeEthereum = async () => {
     try {
-      // Check if user is already logged out
       if (localStorage.getItem('isLoggedOut') === 'true') {
         return;
       }
@@ -111,48 +213,23 @@ function App() {
         // Check current connection without requesting
         const accounts = await ethereumProvider.request({ method: 'eth_accounts' });
         if (accounts.length > 0) {
-          setAccount(accounts[0]);
-          
-          const ethersProvider = new ethers.BrowserProvider(ethereumProvider);
-          const signerInstance = await ethersProvider.getSigner();
-          setSigner(signerInstance);
-          
-          const contractInstance = new ethers.Contract(
-            CONTRACT_ADDRESS,
-            PollContract.abi,
-            signerInstance
-          );
-          
-          setContract(contractInstance);
+          await setupAccountAndContract(ethereumProvider, accounts[0]);
         }
         
-        // Listen for account changes
-        ethereumProvider.on('accountsChanged', (accounts) => {
-          if (accounts.length > 0) {
-            setAccount(accounts[0]);
-          } else {
-            // Handle disconnection
-            setProvider(null);
-            setAccount(null);
-            setSigner(null);
-            setContract(null);
-            setPolls([]);
-            setPollsLoaded(false);
-            setLastTransaction(null);
-          }
-        });
+        // Set up event listeners
+        ethereumProvider.on('accountsChanged', (accounts) => handleAccountChange(ethereumProvider, accounts));
+        ethereumProvider.on('chainChanged', handleChainChange);
       }
     } catch (error) {
+      // Silent error handling
     }
   };
 
   const connectWallet = async () => {
     try {
-      // Clear any previous states when attempting to connect
       localStorage.removeItem('isLoggedOut');
       localStorage.removeItem('connectionCancelled');
       
-      // Force MetaMask to show the connection prompt
       if (window.ethereum) {
         // Reset connection state first
         setProvider(null);
@@ -161,7 +238,6 @@ function App() {
         setContract(null);
         
         try {
-          // Request wallet permissions and accounts
           await window.ethereum.request({
             method: 'wallet_requestPermissions',
             params: [{ eth_accounts: {} }]
@@ -175,39 +251,16 @@ function App() {
             const ethereumProvider = await detectEthereumProvider();
             if (ethereumProvider) {
               setProvider(ethereumProvider);
-              setAccount(currentAccounts[0]);
-              
-              const ethersProvider = new ethers.BrowserProvider(ethereumProvider);
-              const signerInstance = await ethersProvider.getSigner();
-              setSigner(signerInstance);
-              
-              const contractInstance = new ethers.Contract(
-                CONTRACT_ADDRESS,
-                PollContract.abi,
-                signerInstance
-              );
-              setContract(contractInstance);
+              await setupAccountAndContract(ethereumProvider, currentAccounts[0]);
               
               // Set up event listeners
-              ethereumProvider.on('accountsChanged', (newAccounts) => {
-                if (newAccounts.length > 0) {
-                  setAccount(newAccounts[0]);
-                } else {
-                  setAccount(null);
-                  setSigner(null);
-                  setContract(null);
-                  setPolls([]);
-                  setPollsLoaded(false);
-                  setLastTransaction(null);
-                }
-              });
+              ethereumProvider.on('accountsChanged', (accounts) => handleAccountChange(ethereumProvider, accounts));
+              ethereumProvider.on('chainChanged', handleChainChange);
             }
           } else {
-            // If no accounts returned, mark as cancelled
             localStorage.setItem('connectionCancelled', 'true');
           }
         } catch (error) {
-          // Handle user rejection
           localStorage.setItem('connectionCancelled', 'true');
         }
       }
@@ -218,59 +271,48 @@ function App() {
 
   const loadPolls = async () => {
     try {
-      // Check if enough time has passed since last refresh (5 seconds minimum)
-      const now = Date.now();
-      if (now - lastRefreshTime < 5000) {
-        console.log('Skipping refresh - too soon');
-        return;
-      }
-      
       setLoading(true);
-      setLastRefreshTime(now);
+      setError('');
 
       try {
-        if (!readOnlyContract) {
-          console.log('Read-only contract not initialized');
+        const { rpcUrl } = await getNetworkInfo();
+        const readOnlyProvider = new ethers.JsonRpcProvider(rpcUrl);
+        
+        // Verify contract exists
+        const code = await readOnlyProvider.getCode(CONTRACT_ADDRESS);
+        if (code === '0x') {
+          setError(`No contract found at ${CONTRACT_ADDRESS}. Please deploy the contract first.`);
+          setLoading(false);
           return;
         }
         
-        // Get total number of polls
-        const pollCount = await readOnlyContract.pollCount();
-        const pollsData = [];
+        const contractInstance = new ethers.Contract(
+          CONTRACT_ADDRESS,
+          PollContract.abi,
+          readOnlyProvider
+        );
         
-        // Load all polls using the read-only contract
-        if (pollCount > 0) {
-          for (let i = 1; i <= pollCount; i++) {
-            try {
-              const pollData = await readOnlyContract.getPoll(i);
-              
-              // Convert BigInt values to strings and format data
-              const sanitizedPollData = {
-                id: pollData.id.toString(),
-                title: pollData.title,
-                options: pollData.options,
-                voteCounts: pollData.voteCounts.map(count => count.toString()),
-                creator: pollData.creator,
-                totalVotes: pollData.totalVotes.toString(),
-                createdAt: new Date(Number(pollData.createdAt) * 1000).toLocaleDateString()
-              };
-              pollsData.push(sanitizedPollData);
-            } catch (pollError) {
-              // Continue loading other polls even if one fails
-            }
-          }
-        }
-        
-        // Sort polls to show newest first
-        const reversedPolls = [...pollsData].reverse();
-        setPolls(reversedPolls);
-        setPollsLoaded(true);
-        
+        await loadPollsFromContract(contractInstance);
       } catch (error) {
-        // Don't clear polls on error, keep existing data if any
+        setError('Failed to load polls: ' + (error.message || error.reason || 'Unknown error'));
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Helper: Refresh signer and contract to use currently selected account
+  const refreshSignerAndContract = async () => {
+    if (!provider) return null;
+    
+    try {
+      const accounts = await provider.request({ method: 'eth_accounts' });
+      if (accounts.length === 0) return null;
+      
+      return await setupAccountAndContract(provider, accounts[0]);
+    } catch (error) {
+      console.error('Error refreshing signer:', error);
+      return contract; // Return existing contract as fallback
     }
   };
 
@@ -279,31 +321,27 @@ function App() {
       setLoading(true);
       // Clear any previous errors or messages
       setError('');
-      setLastTransaction(null);
 
-      // Show transaction details before sending
-      const createPollFunction = contract.interface.getFunction('createPoll');
-      const encodedData = contract.interface.encodeFunctionData(createPollFunction, [title, options]);
-      const tx = await contract.createPoll(title, options);
-      const receipt = await tx.wait();
-      
-      // Set the success message
-      setLastTransaction({
-        title: '🎉 Poll Created Successfully!',
-        hash: tx.hash,
-        data: encodedData,
-        method: createPollFunction.format()
-      });
+      // Ensure we're using the currently selected account
+      const currentContract = await refreshSignerAndContract() || contract;
+      if (!currentContract) {
+        setError('Please connect your wallet');
+        return;
+      }
+
+      // Create poll transaction
+      const tx = await currentContract.createPoll(title, options);
+      // Wait for transaction confirmation
+      await tx.wait();
+
+      // Refresh balance after transaction
+      await refreshBalance(provider, account);
 
       // Switch to polls tab and reload
       setPollsLoaded(false);
       setActiveTab('polls');
       await loadPolls();
 
-      // Keep the success message visible for 5 seconds
-      setTimeout(() => {
-        setLastTransaction(null);
-      }, 10000);
     } catch (error) {
       if (error.code === 'ACTION_REJECTED') {
         setError('Transaction was cancelled. Please try again to create your poll.');
@@ -339,53 +377,20 @@ function App() {
         }
       }
       
-      // Check if we're on Sepolia network
-      const chainId = await window.ethereum.request({ method: 'eth_chainId' });
-      if (chainId !== SEPOLIA_CHAIN_ID) {
-        try {
-          await window.ethereum.request({
-            method: 'wallet_switchEthereumChain',
-            params: [{ chainId: SEPOLIA_CHAIN_ID }],
-          });
-        } catch (switchError) {
-          // This error code indicates that the chain has not been added to MetaMask
-          if (switchError.code === 4902) {
-            try {
-              await window.ethereum.request({
-                method: 'wallet_addEthereumChain',
-                params: [SEPOLIA_NETWORK_CONFIG]
-              });
-            } catch (addError) {
-              setError('Failed to add Sepolia network. Please add it manually in MetaMask.');
-              return;
-            }
-          } else {
-            setError('Please switch to Sepolia network to vote');
-            return;
-          }
-        }
-      }
-      
-      if (!contract) {
+      // Ensure we're using the currently selected account
+      const currentContract = await refreshSignerAndContract() || contract;
+      if (!currentContract) {
         setError('Please connect your wallet to vote');
         return;
       }
       
-      // Show transaction details before sending
-      const voteFunction = contract.interface.getFunction('vote');
-      const encodedData = contract.interface.encodeFunctionData(voteFunction, [pollId, optionIndex]);
-      
       // Call vote function
-      const tx = await contract.vote(pollId, optionIndex);
+      const tx = await currentContract.vote(pollId, optionIndex);
       // Wait for transaction confirmation
-      const receipt = await tx.wait();
+      await tx.wait();
       
-      setLastTransaction({
-        title: 'Vote Cast Successfully! 🎉',
-        hash: tx.hash,
-        data: encodedData,
-        method: voteFunction.format()
-      });
+      // Refresh balance after transaction
+      await refreshBalance(provider, account);
       
       // Reload polls to show updated vote counts
       setPollsLoaded(false);
@@ -427,11 +432,11 @@ function App() {
 
       // Clear application state but keep the provider
       setAccount(null);
+      setBalance(null);
       setSigner(null);
       setContract(null);
       setPolls([]);
       setPollsLoaded(false);
-      setLastTransaction(null);
 
       // Keep provider but remove listeners to prevent stale events
       if (provider) {
@@ -448,15 +453,13 @@ function App() {
   const renderContent = () => {
     if (!account) {
       return (
-        <div>
-          <Message>
-            <h2>Welcome to Poll App</h2>
-            <p>Connect your wallet to create polls and vote</p>
-            <ConnectButton onClick={connectWallet}>
-              Connect MetaMask
-            </ConnectButton>
-          </Message>
-        </div>
+        <Message>
+          <h2>Welcome to Poll App</h2>
+          <p>Connect your wallet to create polls and vote</p>
+          <ConnectButton onClick={connectWallet}>
+            Connect MetaMask
+          </ConnectButton>
+        </Message>
       );
     }
 
@@ -464,6 +467,7 @@ function App() {
       <>
         <Header 
           account={account} 
+          balance={balance}
           onRefresh={refreshContract} 
           onLogout={handleLogout}
           loading={loading} 
@@ -491,15 +495,6 @@ function App() {
         </TabContainer>
         
         <TabContent>
-          {lastTransaction && (
-            <TransactionInfo 
-              title={lastTransaction.title}
-              hash={lastTransaction.hash}
-              data={lastTransaction.data}
-              method={lastTransaction.method}
-            />
-          )}
-          
           {activeTab === 'polls' && (
             <PollList 
               polls={polls} 

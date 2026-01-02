@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Container,
   RefreshButton,
+  PollListHeader,
   PollCard,
   PollHeader,
   PollTitle,
@@ -52,10 +53,6 @@ const PollList = ({ polls, onVote, loading, account, contract, onRefresh }) => {
       }
     }
     setVotedPolls(votedStatus);
-  };
-
-  const formatAddress = (address) => {
-    return `${address.slice(0, 6)}...${address.slice(-4)}`;
   };
 
   const calculatePercentage = (votes, totalVotes) => {
@@ -119,9 +116,9 @@ const PollList = ({ polls, onVote, loading, account, contract, onRefresh }) => {
 
   return (
     <Container>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+      <PollListHeader>
         <h2>All Polls ({polls.length})</h2>
-      </div>
+      </PollListHeader>
       {error && <ErrorMessage>{error}</ErrorMessage>}
       {polls.map((poll) => {
         const pollVoteInfo = votedPolls[poll.id] || { hasVoted: false, votedOption: -1 };
@@ -139,7 +136,6 @@ const PollList = ({ polls, onVote, loading, account, contract, onRefresh }) => {
               {poll.options.map((option, index) => {
                 const voteCount = parseInt(poll.voteCounts[index]);
                 const percentage = calculatePercentage(voteCount, parseInt(poll.totalVotes));
-                const isVotedOption = votedPolls[poll.id]?.votedOption === index;
 
                 return (
                   <OptionItem key={index}>

@@ -5,6 +5,13 @@ export const Container = styled.div`
   margin: 0 auto;
 `;
 
+export const PollListHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+`;
+
 export const RefreshButton = styled.button`
   background: #28a745;
   color: white;
