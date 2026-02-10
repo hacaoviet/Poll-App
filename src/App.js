@@ -233,7 +233,12 @@ function App() {
         return;
       }
 
-      const ethereumProvider = await detectEthereumProvider();
+      // Check specifically for MetaMask
+      if (!isMetaMaskInstalled()) {
+        return;
+      }
+
+      const ethereumProvider = window.ethereum;
       
       if (ethereumProvider) {
         setProvider(ethereumProvider);
@@ -258,7 +263,19 @@ function App() {
       localStorage.removeItem('isLoggedOut');
       localStorage.removeItem('connectionCancelled');
       
-      if (window.ethereum) {
+      // Check specifically for MetaMask
+      if (!isMetaMaskInstalled()) {
+        setError('MetaMask is not installed. Please install MetaMask extension to continue.');
+        setTimeout(() => {
+          setError('');
+        }, 5000);
+        return;
+      }
+
+      // Use MetaMask specifically
+      const ethereumProvider = window.ethereum;
+      
+      if (ethereumProvider) {
         // Reset connection state first
         setProvider(null);
         setAccount(null);
@@ -266,34 +283,45 @@ function App() {
         setContract(null);
         
         try {
-          await window.ethereum.request({
+          await ethereumProvider.request({
             method: 'wallet_requestPermissions',
             params: [{ eth_accounts: {} }]
           });
           
-          const currentAccounts = await window.ethereum.request({ 
+          const currentAccounts = await ethereumProvider.request({ 
             method: 'eth_requestAccounts'
           });
           
           if (currentAccounts && currentAccounts.length > 0) {
-            const ethereumProvider = await detectEthereumProvider();
-            if (ethereumProvider) {
-              setProvider(ethereumProvider);
-              await setupAccountAndContract(ethereumProvider, currentAccounts[0]);
-              
-              // Set up event listeners
-              ethereumProvider.on('accountsChanged', (accounts) => handleAccountChange(ethereumProvider, accounts));
-              ethereumProvider.on('chainChanged', handleChainChange);
-            }
+            setProvider(ethereumProvider);
+            await setupAccountAndContract(ethereumProvider, currentAccounts[0]);
+            
+            // Set up event listeners
+            ethereumProvider.on('accountsChanged', (accounts) => handleAccountChange(ethereumProvider, accounts));
+            ethereumProvider.on('chainChanged', handleChainChange);
           } else {
             localStorage.setItem('connectionCancelled', 'true');
           }
         } catch (error) {
-          localStorage.setItem('connectionCancelled', 'true');
+          if (error.code === 4001) {
+            // User rejected the request
+            setError('Connection request was rejected. Please try again.');
+            localStorage.setItem('connectionCancelled', 'true');
+          } else {
+            setError('Failed to connect wallet: ' + (error.message || 'Unknown error'));
+            localStorage.setItem('connectionCancelled', 'true');
+          }
+          setTimeout(() => {
+            setError('');
+          }, 5000);
         }
       }
     } catch (error) {
+      setError('Failed to connect wallet: ' + (error.message || 'Unknown error'));
       localStorage.setItem('connectionCancelled', 'true');
+      setTimeout(() => {
+        setError('');
+      }, 5000);
     }
   };
 
@@ -481,16 +509,56 @@ function App() {
     }
   };
 
+  // Helper: Check if MetaMask is installed
+  const isMetaMaskInstalled = () => {
+    return window.ethereum && window.ethereum.isMetaMask === true;
+  };
+
+  // Helper: Redirect to MetaMask installation page
+  const redirectToMetaMask = () => {
+    // Detect browser and redirect to appropriate MetaMask installation page
+    const userAgent = navigator.userAgent.toLowerCase();
+    let installUrl = 'https://metamask.io/download/';
+    
+    if (userAgent.includes('chrome') || userAgent.includes('chromium')) {
+      installUrl = 'https://chrome.google.com/webstore/detail/metamask/nkbihfbeogaeaoehlefnkodbefgpgknn';
+    } else if (userAgent.includes('firefox')) {
+      installUrl = 'https://addons.mozilla.org/en-US/firefox/addon/ether-metamask/';
+    } else if (userAgent.includes('edge')) {
+      installUrl = 'https://microsoftedge.microsoft.com/addons/detail/metamask/ejbalbakoplchlghecdalmeeeajnimhm';
+    } else if (userAgent.includes('opera') || userAgent.includes('opr')) {
+      installUrl = 'https://addons.opera.com/en/extensions/details/metamask/';
+    } else if (userAgent.includes('brave')) {
+      installUrl = 'https://chrome.google.com/webstore/detail/metamask/nkbihfbeogaeaoehlefnkodbefgpgknn';
+    }
+    
+    // Open in new tab
+    window.open(installUrl, '_blank', 'noopener,noreferrer');
+  };
+
   // Render different content based on wallet connection
   const renderContent = () => {
     if (!account) {
+      const metaMaskInstalled = isMetaMaskInstalled();
+      
       return (
           <Message>
             <h2>Welcome to Poll App</h2>
-            <p>Connect your wallet to create polls and vote</p>
-            <ConnectButton onClick={connectWallet}>
-              Connect MetaMask
-            </ConnectButton>
+            <p>Connect your MetaMask wallet to create polls and vote</p>
+            {!metaMaskInstalled && (
+              <p style={{ color: '#ff6b6b', fontSize: '14px', marginTop: '10px', marginBottom: '10px' }}>
+                MetaMask extension is not detected. Please install MetaMask to continue.
+              </p>
+            )}
+            {metaMaskInstalled ? (
+              <ConnectButton onClick={connectWallet}>
+                Connect MetaMask
+              </ConnectButton>
+            ) : (
+              <ConnectButton onClick={redirectToMetaMask} style={{ background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' }}>
+                Install MetaMask
+              </ConnectButton>
+            )}
           </Message>
       );
     }
