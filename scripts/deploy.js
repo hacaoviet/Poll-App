@@ -7,7 +7,15 @@ async function main() {
 
   await pollContract.waitForDeployment();
   const contractAddress = await pollContract.getAddress();
-  await updateContractAddresses(contractAddress);
+  console.log("PollContract deployed to:", contractAddress);
+  
+  // Get network name from hardhat config
+  const networkName = hre.network.name;
+  // Map network names to our config keys
+  const networkKey = networkName === 'sepolia' ? 'sepolia' : 'hardhat';
+  
+  await updateContractAddresses(contractAddress, networkKey);
+  
 }
 
 main()

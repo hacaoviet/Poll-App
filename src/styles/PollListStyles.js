@@ -1,8 +1,19 @@
 import styled from 'styled-components';
 
 export const Container = styled.div`
-  max-width: 800px;
+  max-width: 1200px;
   margin: 0 auto;
+  padding: 0 20px;
+`;
+
+export const PollsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+  
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+  }
 `;
 
 export const PollListHeader = styled.div`
@@ -34,9 +45,11 @@ export const PollCard = styled.div`
   border: 1px solid #e9ecef;
   border-radius: 12px;
   padding: 24px;
-  margin-bottom: 20px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   
   &:hover {
     transform: translateY(-2px);
@@ -66,6 +79,8 @@ export const PollMeta = styled.div`
 
 export const CreatorAddress = styled.div`
   font-family: 'Courier New', monospace;
+  font-size: 12px;
+  color: #6c757d;
   margin-bottom: 4px;
 `;
 
@@ -76,6 +91,7 @@ export const OptionsContainer = styled.div`
   flex-direction: column;
   gap: 12px;
   margin-bottom: 16px;
+  flex: 1;
 `;
 
 export const OptionItem = styled.div`

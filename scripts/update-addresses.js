@@ -1,32 +1,42 @@
 const fs = require('fs');
 const path = require('path');
 
-// Update both contract-address.json and config.js after deployment
-async function updateContractAddresses(contractAddress) {
-  // Update contract-address.json
+// Update contract-address.json after deployment
+// network: 'hardhat' or 'sepolia'
+async function updateContractAddresses(contractAddress, network = 'hardhat') {
   const contractsDir = path.join(__dirname, "..", "src", "contracts");
   if (!fs.existsSync(contractsDir)) {
     fs.mkdirSync(contractsDir);
   }
 
+  const contractAddressPath = path.join(contractsDir, "contract-address.json");
+  
+  // Read existing addresses or create new object
+  let addresses = {};
+  if (fs.existsSync(contractAddressPath)) {
+    try {
+      addresses = JSON.parse(fs.readFileSync(contractAddressPath, 'utf8'));
+    } catch (error) {
+      console.log('Creating new contract-address.json file');
+    }
+  }
+
+  // Update the specific network address
+  addresses[network] = contractAddress;
+  
+  // Keep backward compatibility with PollContract field
+  if (network === 'hardhat') {
+    addresses.PollContract = contractAddress;
+  }
+
+  // Write updated addresses
   fs.writeFileSync(
-    path.join(contractsDir, "contract-address.json"),
-    JSON.stringify({ PollContract: contractAddress }, undefined, 2)
+    contractAddressPath,
+    JSON.stringify(addresses, undefined, 2)
   );
 
-  // Read current config.js
-  const configPath = path.join(__dirname, "..", "src", "config.js");
-  const configContent = fs.readFileSync(configPath, 'utf8');
-
-  // Update CONTRACT_ADDRESS in config.js
-  const updatedConfig = configContent.replace(
-    /export const CONTRACT_ADDRESS = .*?;/,
-    `export const CONTRACT_ADDRESS = "${contractAddress}";`
-  );
-
-  // Write updated config
-  fs.writeFileSync(configPath, updatedConfig);
-
+  console.log(`Contract address updated for ${network}: ${contractAddress}`);
+  console.log("Updated file: src/contracts/contract-address.json");
 }
 
 module.exports = {

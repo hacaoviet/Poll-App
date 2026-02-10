@@ -50,6 +50,7 @@ export const ConnectButton = styled.button`
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
+  margin-top: 20px;
   
   &:hover {
     transform: translateY(-2px);

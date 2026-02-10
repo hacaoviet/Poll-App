@@ -9,7 +9,11 @@ import {
   LOCALHOST_RPC_URL,
   CONTRACT_ADDRESS, 
   LOCALHOST_CHAIN_ID,
-  getRpcUrl
+  getRpcUrl,
+  SEPOLIA_CHAIN_ID,
+  SEPOLIA_RPC_URL,
+  getContractAddress,
+  getCurrencySymbol
 } from './config';
 import {
   AppContainer,
@@ -28,37 +32,45 @@ function App() {
   const [contract, setContract] = useState(null);
   const [account, setAccount] = useState(null);
   const [balance, setBalance] = useState(null);
+  const [currencySymbol, setCurrencySymbol] = useState('ETH'); // Default to ETH
   const [activeTab, setActiveTab] = useState('polls');
   const [polls, setPolls] = useState([]);
   const [loading, setLoading] = useState(false);
   const [pollsLoaded, setPollsLoaded] = useState(false);
   const [error, setError] = useState('');
 
-  // Helper: Get network info (chainId and RPC URL)
+  // Helper: Get network info (chainId, RPC URL, contract address, and currency symbol)
   const getNetworkInfo = async () => {
     let chainId = LOCALHOST_CHAIN_ID;
-    let rpcUrl = LOCALHOST_RPC_URL;
-    
-    if (window.ethereum) {
-      try {
-        chainId = await window.ethereum.request({ method: 'eth_chainId' });
-        rpcUrl = getRpcUrl(chainId);
-      } catch (error) {
-        console.log('Could not detect chain ID, using localhost');
-      }
+        let rpcUrl = LOCALHOST_RPC_URL;
+        
+        if (window.ethereum) {
+          try {
+            chainId = await window.ethereum.request({ method: 'eth_chainId' });
+            rpcUrl = getRpcUrl(chainId);
+          } catch (error) {
+            console.log('Could not detect chain ID, using localhost');
+          }
     }
-    return { chainId, rpcUrl };
+    
+    // Get contract address for the current network
+    const contractAddress = getContractAddress(chainId);
+    
+    // Get currency symbol based on chain ID
+    const currency = getCurrencySymbol(chainId);
+    
+    return { chainId, rpcUrl, contractAddress, currencySymbol: currency };
   };
 
   // Helper: Sanitize poll data
   const sanitizePollData = (pollData) => ({
-    id: pollData.id.toString(),
-    title: pollData.title,
-    options: pollData.options,
-    voteCounts: pollData.voteCounts.map(count => count.toString()),
-    creator: pollData.creator,
-    totalVotes: pollData.totalVotes.toString(),
-    createdAt: new Date(Number(pollData.createdAt) * 1000).toLocaleDateString()
+                  id: pollData.id.toString(),
+                  title: pollData.title,
+                  options: pollData.options,
+                  voteCounts: pollData.voteCounts.map(count => count.toString()),
+                  creator: pollData.creator,
+                  totalVotes: pollData.totalVotes.toString(),
+                  createdAt: new Date(Number(pollData.createdAt) * 1000).toLocaleDateString()
   });
 
   // Helper: Refresh balance
@@ -80,16 +92,29 @@ function App() {
     const ethersProvider = new ethers.BrowserProvider(ethereumProvider);
     const signerInstance = await ethersProvider.getSigner();
     
+    // Get current network and contract address
+    let chainId = LOCALHOST_CHAIN_ID;
+    try {
+      chainId = await ethereumProvider.request({ method: 'eth_chainId' });
+    } catch (error) {
+      console.log('Could not detect chain ID');
+    }
+    const contractAddress = getContractAddress(chainId);
+    
+    // Get currency symbol for current network
+    const currency = getCurrencySymbol(chainId);
+    
     // Update state
     setAccount(accountAddress);
     setSigner(signerInstance);
+    setCurrencySymbol(currency);
     
     // Fetch and update balance
     await refreshBalance(ethereumProvider, accountAddress);
     
-    // Create contract instance
+    // Create contract instance with network-specific address
     const contractInstance = new ethers.Contract(
-      CONTRACT_ADDRESS,
+      contractAddress,
       PollContract.abi,
       signerInstance
     );
@@ -132,21 +157,21 @@ function App() {
             const pollData = await contractInstance.getPoll(i);
             pollsData.push(sanitizePollData(pollData));
             console.log(`Loaded poll ${i}:`, pollData.title);
-          } catch (pollError) {
-            console.error(`Error loading poll ${i}:`, pollError);
+              } catch (pollError) {
+                console.error(`Error loading poll ${i}:`, pollError);
+              }
+            }
+            
+            // Sort polls to show newest first
+            const reversedPolls = [...pollsData].reverse();
+            setPolls(reversedPolls);
+          } else {
+            console.log('No polls found (pollCount is 0)');
           }
-        }
-        
-        // Sort polls to show newest first
-        const reversedPolls = [...pollsData].reverse();
-        setPolls(reversedPolls);
-      } else {
-        console.log('No polls found (pollCount is 0)');
-      }
-      setPollsLoaded(true);
-    } catch (error) {
-      console.error('Error loading polls:', error);
-      setError('Failed to load polls: ' + (error.message || error.reason || 'Unknown error'));
+          setPollsLoaded(true);
+        } catch (error) {
+          console.error('Error loading polls:', error);
+          setError('Failed to load polls: ' + (error.message || error.reason || 'Unknown error'));
       setPollsLoaded(true);
     }
   };
@@ -155,22 +180,25 @@ function App() {
     // Initialize read-only contract and load polls immediately
     const initializeAndLoadPolls = async () => {
       try {
-        const { rpcUrl } = await getNetworkInfo();
+        const { rpcUrl, contractAddress, currencySymbol } = await getNetworkInfo();
         
-        console.log('Connecting to contract at:', CONTRACT_ADDRESS);
+        // Set currency symbol
+        setCurrencySymbol(currencySymbol);
+        
+        console.log('Connecting to contract at:', contractAddress);
         const readOnlyProvider = new ethers.JsonRpcProvider(rpcUrl);
         
         // Check if contract has code at this address
-        const code = await readOnlyProvider.getCode(CONTRACT_ADDRESS);
+        const code = await readOnlyProvider.getCode(contractAddress);
         if (code === '0x') {
-          console.error('No contract code found at address:', CONTRACT_ADDRESS);
-          setError(`No contract found at ${CONTRACT_ADDRESS}. Please deploy the contract first.`);
+          console.error('No contract code found at address:', contractAddress);
+          setError(`No contract found at ${contractAddress}. Please deploy the contract first.`);
           setPollsLoaded(true);
           return;
         }
         
         const contractInstance = new ethers.Contract(
-          CONTRACT_ADDRESS,
+          contractAddress,
           PollContract.abi,
           readOnlyProvider
         );
@@ -275,19 +303,23 @@ function App() {
       setError('');
 
       try {
-        const { rpcUrl } = await getNetworkInfo();
+        const { rpcUrl, contractAddress, currencySymbol } = await getNetworkInfo();
+        
+        // Update currency symbol
+        setCurrencySymbol(currencySymbol);
+        
         const readOnlyProvider = new ethers.JsonRpcProvider(rpcUrl);
         
         // Verify contract exists
-        const code = await readOnlyProvider.getCode(CONTRACT_ADDRESS);
+        const code = await readOnlyProvider.getCode(contractAddress);
         if (code === '0x') {
-          setError(`No contract found at ${CONTRACT_ADDRESS}. Please deploy the contract first.`);
+          setError(`No contract found at ${contractAddress}. Please deploy the contract first.`);
           setLoading(false);
           return;
         }
         
         const contractInstance = new ethers.Contract(
-          CONTRACT_ADDRESS,
+          contractAddress,
           PollContract.abi,
           readOnlyProvider
         );
@@ -333,7 +365,7 @@ function App() {
       const tx = await currentContract.createPoll(title, options);
       // Wait for transaction confirmation
       await tx.wait();
-
+      
       // Refresh balance after transaction
       await refreshBalance(provider, account);
 
@@ -453,13 +485,13 @@ function App() {
   const renderContent = () => {
     if (!account) {
       return (
-        <Message>
-          <h2>Welcome to Poll App</h2>
-          <p>Connect your wallet to create polls and vote</p>
-          <ConnectButton onClick={connectWallet}>
-            Connect MetaMask
-          </ConnectButton>
-        </Message>
+          <Message>
+            <h2>Welcome to Poll App</h2>
+            <p>Connect your wallet to create polls and vote</p>
+            <ConnectButton onClick={connectWallet}>
+              Connect MetaMask
+            </ConnectButton>
+          </Message>
       );
     }
 
@@ -468,6 +500,7 @@ function App() {
         <Header 
           account={account} 
           balance={balance}
+          currencySymbol={currencySymbol}
           onRefresh={refreshContract} 
           onLogout={handleLogout}
           loading={loading} 

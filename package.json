@@ -12,7 +12,9 @@
     "deploy": "hardhat run scripts/deploy.js --network localhost",
     "deploy:hardhat": "hardhat run scripts/deploy.js --network hardhat",
     "node": "hardhat node",
-    "check": "hardhat run scripts/checkContract.js --network localhost"
+    "check": "hardhat run scripts/checkContract.js --network localhost",
+    "test:contract": "hardhat test",
+    "test:contract:verbose": "hardhat test --verbose"
   },
   "dependencies": {
     "@metamask/detect-provider": "^2.0.0",

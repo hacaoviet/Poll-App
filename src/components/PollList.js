@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Container,
+  PollsGrid,
   RefreshButton,
   PollListHeader,
   PollCard,
@@ -26,6 +27,10 @@ const PollList = ({ polls, onVote, loading, account, contract, onRefresh }) => {
   const [votedPolls, setVotedPolls] = useState({});
   const [error, setError] = useState('');
   const [votingInProgress, setVotingInProgress] = useState({ pollId: null, optionIndex: null });
+
+  const formatAddress = (address) => {
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  };
 
   useEffect(() => {
     checkVotedStatus();
@@ -120,53 +125,58 @@ const PollList = ({ polls, onVote, loading, account, contract, onRefresh }) => {
         <h2>All Polls ({polls.length})</h2>
       </PollListHeader>
       {error && <ErrorMessage>{error}</ErrorMessage>}
-      {polls.map((poll) => {
-        const pollVoteInfo = votedPolls[poll.id] || { hasVoted: false, votedOption: -1 };
+      <PollsGrid>
+        {polls.map((poll) => {
+          const pollVoteInfo = votedPolls[poll.id] || { hasVoted: false, votedOption: -1 };
 
-        return (
-          <PollCard key={poll.id}>
-            <PollHeader>
-              <PollTitle>{poll.title}</PollTitle>
-              <PollMeta>
-                <CreatedDate>Created: {poll.createdAt}</CreatedDate>
-              </PollMeta>
-            </PollHeader>
+          return (
+            <PollCard key={poll.id}>
+              <PollHeader>
+                <div>
+                  <PollTitle>{poll.title}</PollTitle>
+                  <CreatorAddress>Creator: {formatAddress(poll.creator)}</CreatorAddress>
+                </div>
+                <PollMeta>
+                  <CreatedDate>Created: {poll.createdAt}</CreatedDate>
+                </PollMeta>
+              </PollHeader>
 
-            <OptionsContainer>
-              {poll.options.map((option, index) => {
-                const voteCount = parseInt(poll.voteCounts[index]);
-                const percentage = calculatePercentage(voteCount, parseInt(poll.totalVotes));
+              <OptionsContainer>
+                {poll.options.map((option, index) => {
+                  const voteCount = parseInt(poll.voteCounts[index]);
+                  const percentage = calculatePercentage(voteCount, parseInt(poll.totalVotes));
 
-                return (
-                  <OptionItem key={index}>
-                    <VoteButton
-                      onClick={() => handleVote(poll.id, index)}
-                      disabled={pollVoteInfo.hasVoted || 
-                        (votingInProgress.pollId === poll.id && votingInProgress.optionIndex === index)}
-                      voted={index === pollVoteInfo.votedOption}
-                    >
-                      {index === pollVoteInfo.votedOption 
-                        ? 'Voted' 
-                        : (votingInProgress.pollId === poll.id && votingInProgress.optionIndex === index)
-                          ? 'Voting...' 
-                          : 'Vote'}
-                    </VoteButton>
-                    <OptionText>{option}</OptionText>
-                    <VoteCount>{voteCount}</VoteCount>
-                    <ProgressBar>
-                      <ProgressFill percentage={percentage} />
-                    </ProgressBar>
-                  </OptionItem>
-                );
-              })}
-            </OptionsContainer>
+                  return (
+                    <OptionItem key={index}>
+                      <VoteButton
+                        onClick={() => handleVote(poll.id, index)}
+                        disabled={pollVoteInfo.hasVoted || 
+                          (votingInProgress.pollId === poll.id && votingInProgress.optionIndex === index)}
+                        voted={index === pollVoteInfo.votedOption}
+                      >
+                        {index === pollVoteInfo.votedOption 
+                          ? 'Voted' 
+                          : (votingInProgress.pollId === poll.id && votingInProgress.optionIndex === index)
+                            ? 'Voting...' 
+                            : 'Vote'}
+                      </VoteButton>
+                      <OptionText>{option}</OptionText>
+                      <VoteCount>{voteCount}</VoteCount>
+                      <ProgressBar>
+                        <ProgressFill percentage={percentage} />
+                      </ProgressBar>
+                    </OptionItem>
+                  );
+                })}
+              </OptionsContainer>
 
-            <TotalVotes>
-              Total Votes: {poll.totalVotes}
-            </TotalVotes>
-          </PollCard>
-        );
-      })}
+              <TotalVotes>
+                Total Votes: {poll.totalVotes}
+              </TotalVotes>
+            </PollCard>
+          );
+        })}
+      </PollsGrid>
     </Container>
   );
 };
