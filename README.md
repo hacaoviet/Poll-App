@@ -9,6 +9,8 @@ A modern, decentralized polling application built with React.js and Solidity sma
 - **Vote on Polls**: Vote on existing polls using your wallet
 - **View Results**: View poll results with vote counts and percentages
 
+---
+
 ## 🛠️ Technology Stack
 
 - **Frontend**: React.js with styled-components
@@ -21,18 +23,12 @@ A modern, decentralized polling application built with React.js and Solidity sma
 
 ## 🚀 Installation & Setup
 
-### Step 1: Clone the Repository
-
 ```bash
 git clone <repository-url>
 cd Poll-App
-```
-
-### Step 2: Install Dependencies
-
-```bash
 npm install
 ```
+
 ---
 
 ## 🏠 Option A: Running with Hardhat (Localhost)
@@ -51,7 +47,7 @@ This will:
 
 **Keep this terminal open!** The node must be running for the app to work.
 
-### Step 3: Deploy Contract to Localhost
+### Step 2: Deploy Contract to Localhost
 
 In a **new terminal window** (keep the Hardhat node running), run:
 
@@ -68,7 +64,7 @@ Updated file: src/contracts/contract-address.json
 
 The contract address is automatically saved to `src/contracts/contract-address.json`.
 
-### Step 4: Configure MetaMask for Localhost
+### Step 3: Configure MetaMask for Localhost
 
 1. **Open MetaMask** and click the network dropdown
 2. **Add Network** → **Add a network manually**
@@ -80,7 +76,7 @@ The contract address is automatically saved to `src/contracts/contract-address.j
    - **Block Explorer URL**: (leave empty)
 4. Click **Save**
 
-### Step 5: Import Test Account to MetaMask
+### Step 4: Import Test Account to MetaMask
 
 1. In the terminal where `npx hardhat node` is running, you'll see test accounts like:
    ```
@@ -95,7 +91,7 @@ The contract address is automatically saved to `src/contracts/contract-address.j
 
 3. **Switch to Hardhat Local network** in MetaMask
 
-### Step 6: Start the React Application
+### Step 5: Start the React Application
 
 In a **new terminal window**, run:
 
@@ -108,7 +104,7 @@ The application will:
 - Connect to the local Hardhat node
 - Use the deployed contract address automatically
 
-### Step 7: Connect Wallet and Test
+### Step 6: Connect Wallet and Test
 
 1. Open `http://localhost:3000` in your browser
 2. Click **"Connect MetaMask"**
