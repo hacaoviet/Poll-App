@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import detectEthereumProvider from '@metamask/detect-provider';
 import { ethers } from 'ethers';
 import PollContract from './artifacts/contracts/PollContract.sol/PollContract.json';
 import CreatePoll from './components/CreatePoll';
